@@ -54,6 +54,37 @@ class CocoEvaluator:
         for iou_type, coco_eval in self.coco_eval.items():
             print(f"IoU metric: {iou_type}")
             coco_eval.summarize()
+            
+            if iou_type == "bbox":
+                # Calculate additional metrics
+                stats = self.calculate_detection_metrics(coco_eval)
+                print("\nAdditional Detection Metrics:")
+                print(f"F1 Score: {stats['f1']:.3f}")
+                print(f"mAP: {stats['mAP']:.3f}")
+                print(f"mAR: {stats['mAR']:.3f}")
+                print(f"mAP50-95: {stats['mAP50-95']:.3f}")
+
+    def calculate_detection_metrics(self, coco_eval):
+        stats = {}
+        
+        # Get precision and recall arrays
+        precisions = coco_eval.eval['precision']
+        
+        # Calculate mAP50-95 (already calculated by COCO, just accessing it)
+        stats['mAP50-95'] = coco_eval.stats[0]
+        
+        # Calculate mAP@0.5
+        stats['mAP'] = np.mean(precisions[0, :, :, 0, -1])
+         
+        # Calculate mAR@0.5
+        recalls = coco_eval.eval['recall']
+        stats['mAR'] = np.mean(recalls[0, :, 2, -1])
+        # Calculate F1 Score (using precision and recall at optimal @0.5 iou)
+        f1_scores = 2 * (stats['mAP'] * stats['mAR']) / (stats['mAP'] + stats['mAR'])
+
+        stats['f1'] = np.max(f1_scores)  # Get best F1 score
+        
+        return stats
 
     def prepare(self, predictions, iou_type):
         if iou_type == "bbox":
