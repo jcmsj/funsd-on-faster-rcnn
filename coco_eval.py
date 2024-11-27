@@ -54,7 +54,6 @@ class CocoEvaluator:
         for iou_type, coco_eval in self.coco_eval.items():
             print(f"IoU metric: {iou_type}")
             coco_eval.summarize()
-            
             if iou_type == "bbox":
                 # Calculate additional metrics
                 stats = self.calculate_detection_metrics(coco_eval)
@@ -63,6 +62,19 @@ class CocoEvaluator:
                 print(f"mAP: {stats['mAP']:.3f}")
                 print(f"mAR: {stats['mAR']:.3f}")
                 print(f"mAP50-95: {stats['mAP50-95']:.3f}")
+                print("Per class:")
+                for catId in coco_eval.cocoGt.getCatIds():
+                    print(f"Category ID: {catId}")
+                    coco_eval.params.catIds = [catId]
+                    coco_eval.evaluate()
+                    coco_eval.accumulate()
+                    coco_eval.summarize()
+                    stats = self.calculate_detection_metrics(coco_eval)
+                    print("\nAdditional Detection Metrics:")
+                    print(f"F1 Score: {stats['f1']:.3f}")
+                    print(f"mAP: {stats['mAP']:.3f}")
+                    print(f"mAR: {stats['mAR']:.3f}")
+                    print(f"mAP50-95: {stats['mAP50-95']:.3f}")
 
     def calculate_detection_metrics(self, coco_eval):
         stats = {}

@@ -181,6 +181,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
     
     parser.add_argument("--classes", default=4, type=int, help="number of classes (excluding background class)")
+    parser.add_argument("--save-interval", default=1, type=int, help="interval for saving checkpoints (default: 1 epoch)")
 
     return parser
 
@@ -288,7 +289,7 @@ def main(args):
     else:
         raise RuntimeError(f"Invalid optimizer {args.opt}. Only SGD and AdamW are supported.")
 
-    scaler = torch.cuda.amp.GradScaler() if args.amp else None
+    scaler = torch.amp.GradScaler('cuda') if args.amp else None
 
     args.lr_scheduler = args.lr_scheduler.lower()
     if args.lr_scheduler == "multisteplr":
@@ -317,6 +318,7 @@ def main(args):
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
+        optimizer.step()
         if args.distributed:
             train_sampler.set_epoch(epoch)
         train_one_epoch(model, optimizer, data_loader, device, epoch, args.print_freq, scaler)
@@ -329,10 +331,15 @@ def main(args):
                 "args": args,
                 "epoch": epoch,
             }
+
             if args.amp:
                 checkpoint["scaler"] = scaler.state_dict()
-            utils.save_on_master(checkpoint, os.path.join(args.output_dir, f"model_{epoch}.pth"))
+            if (epoch + 1) % args.save_interval == 0:
+                utils.save_on_master(checkpoint, os.path.join(args.output_dir, f"checkpoint_{epoch}.pth"))
+                
             utils.save_on_master(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
+            # save just the model
+            torch.save(model_without_ddp.state_dict(), os.path.join(args.output_dir, f"model_{epoch}.pt"))
 
         # evaluate after every epoch
         evaluate(model, data_loader_test, device=device)
