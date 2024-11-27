@@ -42,7 +42,12 @@ def copypaste_collate_fn(batch):
 
 def get_dataset(is_train, args):
     image_set = "train" if is_train else "val"
-    num_classes, mode = {"coco": (5, "detect"), "coco_kp": (2, "person_keypoints")}[args.dataset]
+    if args.dataset == "coco":
+        num_classes = args.classes + 1  # Add 1 for background class
+        mode = "detect"
+    elif args.dataset == "coco_kp":
+        num_classes = 2
+        mode = "person_keypoints"
     with_masks = False #"mask" in args.model 
     ds = get_coco(
         root=args.data_path,
@@ -128,7 +133,7 @@ def get_args_parser(add_help=True):
         "--lr-gamma", default=0.1, type=float, help="decrease lr by a factor of lr-gamma (multisteplr scheduler only)"
     )
     parser.add_argument("--print-freq", default=20, type=int, help="print frequency")
-    parser.add_argument("--output-dir", default=".", type=str, help="path to save outputs")
+    parser.add_argument("--output-dir", default="train", type=str, help="path to save outputs")
     parser.add_argument("--resume", default="", type=str, help="path of checkpoint")
     parser.add_argument("--start_epoch", default=0, type=int, help="start epoch")
     parser.add_argument("--aspect-ratio-group-factor", default=3, type=int)
@@ -174,6 +179,8 @@ def get_args_parser(add_help=True):
 
     parser.add_argument("--backend", default="PIL", type=str.lower, help="PIL or tensor - case insensitive")
     parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
+    
+    parser.add_argument("--classes", default=4, type=int, help="number of classes (excluding background class)")
 
     return parser
 
@@ -189,7 +196,14 @@ def main(args):
         raise ValueError("KeyPoint detection doesn't support V2 transforms yet")
 
     if args.output_dir:
+        # Find first available output directory with incremental suffix
+        base_output_dir = args.output_dir
+        suffix = 0
+        while os.path.exists(args.output_dir):
+            args.output_dir = f"{base_output_dir}{suffix}"
+            suffix += 1
         utils.mkdir(args.output_dir)
+        print(f"Using output directory: {args.output_dir}")
 
     utils.init_distributed_mode(args)
     print(args)

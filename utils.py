@@ -109,6 +109,30 @@ def reduce_dict(input_dict, average=True):
     return reduced_dict
 
 
+def box_iou(boxes1, boxes2):
+    """
+    Calculate IoU between two sets of boxes
+    Args:
+        boxes1 (torch.Tensor): [N, 4] first set of boxes (x1,y1,x2,y2)
+        boxes2 (torch.Tensor): [M, 4] second set of boxes (x1,y1,x2,y2)
+    Returns:
+        torch.Tensor: [N, M] IoU matrix
+    """
+    area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
+    area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
+
+    wh = (rb - lt).clamp(min=0)  # [N,M,2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+    union = area1[:, None] + area2 - inter
+
+    iou = inter / union
+    return iou
+
+
 class MetricLogger:
     def __init__(self, delimiter="\t"):
         self.meters = defaultdict(SmoothedValue)

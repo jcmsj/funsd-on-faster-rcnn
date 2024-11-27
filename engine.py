@@ -86,6 +86,10 @@ def evaluate(model, data_loader, device):
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types)
 
+    # Initialize confusion matrix
+    num_classes = max(target['labels'].max().item() for _, targets in data_loader for target in targets) + 1
+    confusion_matrix = torch.zeros((num_classes, 2, 2), dtype=torch.int64)  # For each class: [[TN, FP], [FN, TP]]
+
     for images, targets in metric_logger.log_every(data_loader, 100, header):
         images = list(img.to(device) for img in images)
 
@@ -96,6 +100,39 @@ def evaluate(model, data_loader, device):
 
         outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
         model_time = time.time() - model_time
+
+        # Update confusion matrix
+        for target, output in zip(targets, outputs):
+            gt_labels = target['labels']
+            gt_boxes = target['boxes']
+            pred_labels = output['labels']
+            pred_boxes = output['boxes']
+            pred_scores = output['scores']
+            
+            # Use score threshold of 0.5
+            mask = pred_scores > 0.5
+            pred_labels = pred_labels[mask]
+            pred_boxes = pred_boxes[mask]
+            
+            for cls in range(num_classes):
+                gt_mask = gt_labels == cls
+                pred_mask = pred_labels == cls
+                
+                # True Positives: predicted boxes that overlap with GT boxes for this class
+                if gt_mask.any() and pred_mask.any():
+                    gt_class_boxes = gt_boxes[gt_mask]
+                    pred_class_boxes = pred_boxes[pred_mask]
+                    ious = utils.box_iou(gt_class_boxes, pred_class_boxes)
+                    tp = (ious.max(dim=1)[0] > 0.5).sum().item()
+                    fn = gt_mask.sum().item() - tp
+                    fp = pred_mask.sum().item() - tp
+                else:
+                    tp = 0
+                    fn = gt_mask.sum().item()
+                    fp = pred_mask.sum().item()
+                
+                tn = len(gt_labels) - (tp + fp + fn)
+                confusion_matrix[cls] += torch.tensor([[tn, fp], [fn, tp]])
 
         res = {target["image_id"]: output for target, output in zip(targets, outputs)}
         evaluator_time = time.time()
@@ -112,4 +149,12 @@ def evaluate(model, data_loader, device):
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
     torch.set_num_threads(n_threads)
-    return coco_evaluator
+
+    # Print confusion matrix results
+    print("\nConfusion Matrix per class:")
+    for cls in range(num_classes):
+        print(f"\nClass {cls}:")
+        print(f"TN: {confusion_matrix[cls][0,0]}, FP: {confusion_matrix[cls][0,1]}")
+        print(f"FN: {confusion_matrix[cls][1,0]}, TP: {confusion_matrix[cls][1,1]}")
+        
+    return coco_evaluator, confusion_matrix
