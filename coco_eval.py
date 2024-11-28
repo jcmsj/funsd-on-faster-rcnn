@@ -62,20 +62,6 @@ class CocoEvaluator:
                 print(f"mAP: {stats['mAP']:.3f}")
                 print(f"mAR: {stats['mAR']:.3f}")
                 print(f"mAP50-95: {stats['mAP50-95']:.3f}")
-                print("Per class:")
-                for catId in coco_eval.cocoGt.getCatIds():
-                    print(f"Category ID: {catId}")
-                    coco_eval.params.catIds = [catId]
-                    coco_eval.evaluate()
-                    coco_eval.accumulate()
-                    coco_eval.summarize()
-                    stats = self.calculate_detection_metrics(coco_eval)
-                    print("\nAdditional Detection Metrics:")
-                    print(f"F1 Score: {stats['f1']:.3f}")
-                    print(f"mAP: {stats['mAP']:.3f}")
-                    print(f"mAR: {stats['mAR']:.3f}")
-                    print(f"mAP50-95: {stats['mAP50-95']:.3f}")
-
     def calculate_detection_metrics(self, coco_eval):
         stats = {}
         
@@ -227,6 +213,8 @@ def create_common_coco_eval(coco_eval, img_ids, eval_imgs):
     coco_eval.evalImgs = eval_imgs
     coco_eval.params.imgIds = img_ids
     coco_eval._paramsEval = copy.deepcopy(coco_eval.params)
+
+        
 
 
 def evaluate(imgs):
